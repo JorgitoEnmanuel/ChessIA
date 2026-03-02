@@ -1,58 +1,55 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Mentor de Ajedrez IA</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://unpkg.com/chess.js@0.10.3/chess.js"></script>
-    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
-    <style>
-        body { background: #1a1a1a; color: white; font-family: sans-serif; text-align: center; }
-        #board { width: 350px; margin: 20px auto; }
-        #status { padding: 15px; background: #333; border-radius: 10px; margin: 10px; min-height: 50px; }
-        .loading { color: #f1c40f; }
-    </style>
+  <meta charset="UTF-8">
+  <title>Mini App Ajedrez</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f0f0f0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh; /* ocupa toda la pantalla */
+    }
+    #board {
+      width: 90vw;   /* ancho relativo a la pantalla */
+      max-width: 500px; /* límite máximo para no desbordar */
+    }
+  </style>
+  <!-- Librería Chessboard.js -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+  <!-- Telegram WebApp API -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-    <h3>?? Mentor Gemini</h3>
-    <div id="status">Haz tu movimiento para recibir consejo...</div>
-    <div id="board"></div>
+  <div id="board"></div>
 
-    <script>
-        var board = null;
-        var game = new Chess();
-        var $status = $('#status');
+  <script>
+    // Inicializar tablero
+    var board = Chessboard('board', {
+      position: 'start', // posición inicial
+      draggable: true    // permitir arrastrar piezas
+    });
 
-        function onDrop (source, target) {
-            var move = game.move({ from: source, to: target, promotion: 'q' });
-            if (move === null) return 'snapback';
+    // Ajustar tamaño según la pantalla del móvil
+    function resizeBoard() {
+      let height = Telegram.WebApp.viewportHeight; // altura disponible
+      let width = Telegram.WebApp.viewportWidth;   // ancho disponible
+      document.getElementById('board').style.width = Math.min(width * 0.9, 500) + 'px';
+      board.resize();
+    }
 
-            // ENVIAR A MAKE.COM
-            $status.html('<span class="loading">Pensando...</span>');
-            
-            fetch('TU_URL_DE_WEBHOOK_DE_MAKE', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    move: move.san,
-                    fen: game.fen(),
-                    user: Telegram.WebApp.initDataUnsafe.user?.first_name || "Jugador"
-                })
-            })
-            .then(res => res.json())
-            .then(data => {
-                $status.html(data.respuesta); // Aquí mostramos lo que dice Gemini
-                if(data.movimiento_ia) {
-                    game.move(data.movimiento_ia);
-                    board.position(game.fen());
-                }
-            });
-        }
+    // Expandir mini app a pantalla completa
+    Telegram.WebApp.expand();
 
-        var config = { draggable: true, position: 'start', onDrop: onDrop };
-        board = Chessboard('board', config);
-        Telegram.WebApp.ready();
-    </script>
+    // Ajustar tablero al cargar
+    resizeBoard();
+
+    // Ajustar tablero si cambia el tamaño de la pantalla
+    Telegram.WebApp.onEvent('viewportChanged', resizeBoard);
+  </script>
 </body>
 </html>
