@@ -1,55 +1,26 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Mini App Ajedrez</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background: #f0f0f0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh; /* ocupa toda la pantalla */
-    }
-    #board {
-      width: 90vw;   /* ancho relativo a la pantalla */
-      max-width: 500px; /* límite máximo para no desbordar */
-    }
-  </style>
-  <!-- Librería Chessboard.js -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
-  <!-- Telegram WebApp API -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-</head>
-<body>
-  <div id="board"></div>
+# ♟️ AI Chess Tutor - Prototipo
 
-  <script>
-    // Inicializar tablero
-    var board = Chessboard('board', {
-      position: 'start', // posición inicial
-      draggable: true    // permitir arrastrar piezas
-    });
+Este es un tutor de ajedrez interactivo basado en la web que utiliza inteligencia artificial para analizar posiciones y ofrecer consejos pedagógicos en tiempo real. Combina la potencia de un motor de ajedrez local con la capacidad narrativa de modelos de lenguaje a través de automatización.
 
-    // Ajustar tamaño según la pantalla del móvil
-    function resizeBoard() {
-      let height = Telegram.WebApp.viewportHeight; // altura disponible
-      let width = Telegram.WebApp.viewportWidth;   // ancho disponible
-      document.getElementById('board').style.width = Math.min(width * 0.9, 500) + 'px';
-      board.resize();
-    }
+## 🚀 Características
 
-    // Expandir mini app a pantalla completa
-    Telegram.WebApp.expand();
+- **Tablero Interactivo:** Construido con `chessboard.js` y `chess.js` para una experiencia de juego fluida.
+- **Motor Stockfish Local:** Integración de `stockfish.js` mediante Web Workers para evaluación inmediata de la posición.
+- **Modo Edición:** Herramienta para configurar posiciones personalizadas (estudios o finales) simplemente arrastrando piezas.
+- **Mentor IA:** Integración con **Make.com** para enviar datos de la partida y recibir explicaciones tácticas y sugerencias de mejora.
+- **Voz y Chat:** Soporte para comandos de voz y respuestas interactivas.
 
-    // Ajustar tablero al cargar
-    resizeBoard();
+## 🛠️ Stack Tecnológico
 
-    // Ajustar tablero si cambia el tamaño de la pantalla
-    Telegram.WebApp.onEvent('viewportChanged', resizeBoard);
-  </script>
-</body>
-</html>
+- **Frontend:** HTML5, CSS3 (Flexbox), JavaScript (jQuery).
+- **Lógica de Ajedrez:** [Chess.js](https://github.com/jhlywa/chess.js) y [Chessboard.js](https://chessboardjs.com/).
+- **Motor de Análisis:** [Stockfish.js](https://github.com/nmrugg/stockfish.js).
+- **Backend/Automatización:** Webhooks de Make.com.
+
+## 📦 Instalación y Uso Local
+
+Debido a que el motor Stockfish utiliza *Web Workers*, los navegadores bloquean su ejecución si abres el archivo directamente (`file://`).
+
+1. **Clona el repositorio:**
+   ```bash
+   git clone [https://github.com/tu-usuario/nombre-del-repo.git](https://github.com/tu-usuario/nombre-del-repo.git)
