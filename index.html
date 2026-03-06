@@ -80,7 +80,7 @@
         <div id="board"></div>
         <div class="info-panel">
             <strong>Estado:</strong> <span id="status">Turno: Blancas ♔</span><br>
-            <strong>Stockfish:</strong> <span id="eval">Inactivo</span>
+            <strong>stockfish:</strong> <span id="eval">Inactivo</span>
         </div>
 
         <div class="board-controls">
@@ -135,7 +135,7 @@ var selectedPiece = null;
 
 // Inicialización segura del Motor
 try {
-    engine = new Worker("https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js")
+    engine = new Worker("stockfish.js");
     engine.onmessage = function(event) {
         var line = event.data;
         if (line.includes('score cp')) {
@@ -148,7 +148,7 @@ try {
         }
     };
 } catch(e) {
-    console.log("Stockfish.js no encontrado. El tablero funcionará sin motor local.");
+    console.log("stockfish.js no encontrado. El tablero funcionará sin motor local.");
 }
 
 function analizarPosicion() {
