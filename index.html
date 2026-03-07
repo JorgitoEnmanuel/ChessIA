@@ -135,7 +135,7 @@ var selectedPiece = null;
 
 // Inicialización segura del Motor
 try {
-    engine = new Worker("stockfish.js");
+    engine = new Worker("https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.asm.js");
     engine.onmessage = function(event) {
         var line = event.data;
         if (line.includes('score cp')) {
