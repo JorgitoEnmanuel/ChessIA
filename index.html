@@ -134,27 +134,42 @@ var editMode = false;
 var selectedPiece = null;
 
 // --- INICIALIZACIÓN DEL MOTOR STOCKFISH ---
-try {
-    // Versión ASM.js: compatible con GitHub Pages y sin errores de SharedArrayBuffer
-    engine = new Worker("https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.asm.js");
-    
-    engine.onmessage = function(event) {
-        var line = event.data;
+var engine;
+
+fetch("https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.asm.js")
+    .then(response => response.text())
+    .then(code => {
+        // Convertimos el código de la CDN en un archivo local temporal (Blob)
+        const blob = new Blob([code], { type: "application/javascript" });
+        const workerUrl = URL.createObjectURL(blob);
         
-        // Extraer Evaluación
-        if (line.includes("info depth") && line.includes("score cp")) {
-            var match = line.match(/score cp (-?\d+)/);
-            if (match) {
-                currentEval = (parseInt(match[1]) / 100).toFixed(1);
-                $('#eval').text("Evaluación: " + (currentEval > 0 ? "+" + currentEval : currentEval));
+        engine = new Worker(workerUrl);
+        
+        engine.onmessage = function(event) {
+            var line = event.data;
+            
+            // Extraer Evaluación
+            if (line.includes("info depth") && line.includes("score cp")) {
+                var match = line.match(/score cp (-?\d+)/);
+                if (match) {
+                    currentEval = (parseInt(match[1]) / 100).toFixed(1);
+                    $('#eval').text("Evaluación: " + (currentEval > 0 ? "+" + currentEval : currentEval));
+                }
             }
-        }
-        
-        // Extraer Mejor Jugada
-        if (line.startsWith("bestmove")) {
-            bestMove = line.split(" ")[1];
-            console.log("Sugerencia Stockfish:", bestMove);
-        }
+            
+            // Extraer Mejor Jugada
+            if (line.startsWith("bestmove")) {
+                bestMove = line.split(" ")[1];
+                console.log("Sugerencia Stockfish:", bestMove);
+            }
+        };
+
+        console.log("¡Motor Stockfish activado con éxito!");
+        $('#eval').text("Stockfish: Listo");
+    })
+    .catch(e => {
+        console.error("Error al descargar Stockfish:", e);
+        $('#eval').text("Error de conexión con el motor.");
     };
     console.log("Motor Stockfish (ASM.js) cargado correctamente.");
 } catch (e) {
