@@ -80,7 +80,7 @@
         <div id="board"></div>
         <div class="info-panel">
             <strong>Estado:</strong> <span id="status">Turno: Blancas ♔</span><br>
-            <strong>stockfish:</strong> <span id="eval">Inactivo</span>
+            <strong>Stockfish:</strong> <span id="eval">Cargando motor...</span>
         </div>
 
         <div class="board-controls">
@@ -121,7 +121,7 @@
 
 <script>
 // --- CONFIGURACIÓN ---
-var makeWebhookUrl = "TU_URL_DE_MAKE_AQUI"; 
+var makeWebhookUrl = "TU_URL_DE_MAKE_AQUI"; // REEMPLAZA ESTO
 var PIECE_IMG = 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png';
 
 // --- ESTADO ---
@@ -129,56 +129,65 @@ var board = null;
 var game = new Chess();
 var engine = null;
 var currentEval = "0.0";
-var bestMove = "";
+var bestMove = "Buscando...";
 var editMode = false;
 var selectedPiece = null;
 
-// Inicialización segura del Motor
-var engine;
+// --- INICIALIZACIÓN DEL MOTOR STOCKFISH ---
 try {
-    // Usamos la versión ASM.js que es compatible con GitHub Pages sin errores de seguridad
+    // Versión ASM.js: compatible con GitHub Pages y sin errores de SharedArrayBuffer
     engine = new Worker("https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.asm.js");
     
     engine.onmessage = function(event) {
-        if (event.data.includes("evaluation")) {
-            console.log("Análisis de Stockfish:", event.data);
-            // Aquí podrías actualizar el texto en tu pantalla con la evaluación
+        var line = event.data;
+        
+        // Extraer Evaluación
+        if (line.includes("info depth") && line.includes("score cp")) {
+            var match = line.match(/score cp (-?\d+)/);
+            if (match) {
+                currentEval = (parseInt(match[1]) / 100).toFixed(1);
+                $('#eval').text("Evaluación: " + (currentEval > 0 ? "+" + currentEval : currentEval));
+            }
+        }
+        
+        // Extraer Mejor Jugada
+        if (line.startsWith("bestmove")) {
+            bestMove = line.split(" ")[1];
+            console.log("Sugerencia Stockfish:", bestMove);
         }
     };
-
-    console.log("Motor Stockfish cargado correctamente desde la CDN.");
+    console.log("Motor Stockfish (ASM.js) cargado correctamente.");
 } catch (e) {
-    console.error("Error al cargar el motor:", e);
-    alert("El motor no pudo cargar. Revisa la consola.");
-        }
-    };
-} catch(e) {
-    console.log("stockfish.js no encontrado. El tablero funcionará sin motor local.");
+    console.error("Error cargando Stockfish:", e);
+    $('#eval').text("Error al cargar motor.");
 }
 
 function analizarPosicion() {
     if (!engine) return;
     engine.postMessage('position fen ' + game.fen());
-    engine.postMessage('go depth 12');
+    engine.postMessage('go depth 10');
 }
 
 // --- LÓGICA DEL TABLERO ---
 function onDrop(source, target) {
     if (editMode) return 'snapback';
+    
     var move = game.move({ from: source, to: target, promotion: 'q' });
     if (move === null) return 'snapback';
     
     updateStatus();
-    analizarPosicion();
+    analizarPosicion(); // Llama al motor local
     
+    // Enviar a Make después de un segundo para dar tiempo al motor a procesar
     setTimeout(() => {
-        enviarAMake("Movimiento: " + move.san, game.fen());
+        enviarAMake("Movimiento realizado: " + move.san, game.fen());
     }, 1000);
 }
 
 function updateStatus() {
     var status = game.turn() === 'w' ? 'Turno: Blancas ♔' : 'Turno: Negras ♚';
     if (game.in_checkmate()) status = '¡Jaque Mate!';
+    if (game.in_draw()) status = 'Tablas';
     $('#status').html(status);
 }
 
@@ -187,6 +196,7 @@ function toggleEditMode() {
     editMode = !editMode;
     selectedPiece = null;
     $('.piece-btn').removeClass('selected');
+    
     if (editMode) {
         $('#modeToggleBtn').text('✅ Guardar Posición').addClass('active');
         $('#pieceEditor').show();
@@ -195,6 +205,7 @@ function toggleEditMode() {
         $('#modeToggleBtn').text('✏️ Activar modo edición').removeClass('active');
         $('#pieceEditor').hide();
         board.draggable(true);
+        // Sincronizar Chess.js con la nueva posición
         var fen = ChessBoard.objToFen(board.position()) + ' ' + (game.turn()) + ' KQkq - 0 1';
         game.load(fen);
     }
@@ -212,42 +223,30 @@ function buildPalette(id, pieces) {
     });
 }
 
-// --- INICIO ---
-$(document).ready(function() {
-    buildPalette('whitePalette', ['wK','wQ','wR','wB','wN','wP']);
-    buildPalette('blackPalette', ['bK','bQ','bR','bB','bN','bP']);
-
-    board = ChessBoard('board', {
-        draggable: true,
-        position: 'start',
-        onDrop: onDrop,
-        onSnapEnd: () => board.position(game.fen()),
-        pieceTheme: PIECE_IMG
-    });
-
-    $('#board').on('click', '.square-55d63', function() {
-        if (!editMode) return;
-        var square = $(this).attr('data-square');
-        var pos = board.position();
-        if (selectedPiece) pos[square] = selectedPiece;
-        else delete pos[square];
-        board.position(pos);
-    });
-});
-
-// --- COMUNICACIÓN ---
+// --- COMUNICACIÓN CON MAKE.COM ---
 async function enviarAMake(msg, fen) {
     addMessage("user", msg);
+    
     try {
         const res = await fetch(makeWebhookUrl, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ mensaje: msg, fen: fen, eval: currentEval, best: bestMove })
+            body: JSON.stringify({ 
+                mensaje: msg, 
+                fen: fen, 
+                eval: currentEval, 
+                best: bestMove 
+            })
         });
+        
         const data = await res.json();
         if (data.texto_pedagogico) addMessage("ai", data.texto_pedagogico);
         if (data.audioUrl) new Audio(data.audioUrl).play();
-    } catch(e) { console.error(e); }
+        
+    } catch(e) { 
+        console.error("Error en Webhook:", e);
+        addMessage("ai", "Error conectando con el mentor IA. Revisa tu URL de Make.");
+    }
 }
 
 function addMessage(s, t) {
@@ -263,6 +262,39 @@ function loadFen() {
     var f = $('#fen-input').val();
     if (game.load(f)) { board.position(f); updateStatus(); }
 }
+
+// --- CHAT MANUAL ---
+$('#send-btn').click(() => {
+    var text = $('#chat-input').val();
+    if (text) {
+        enviarAMake(text, game.fen());
+        $('#chat-input').val('');
+    }
+});
+
+// --- INICIO ---
+$(document).ready(function() {
+    buildPalette('whitePalette', ['wK','wQ','wR','wB','wN','wP']);
+    buildPalette('blackPalette', ['bK','bQ','bR','bB','bN','bP']);
+
+    board = ChessBoard('board', {
+        draggable: true,
+        position: 'start',
+        onDrop: onDrop,
+        onSnapEnd: () => board.position(game.fen()),
+        pieceTheme: PIECE_IMG
+    });
+
+    // Clic en casillas para modo edición
+    $('#board').on('click', '.square-55d63', function() {
+        if (!editMode) return;
+        var square = $(this).attr('data-square');
+        var pos = board.position();
+        if (selectedPiece) pos[square] = selectedPiece;
+        else delete pos[square];
+        board.position(pos);
+    });
+});
 
 // --- VOZ ---
 const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
