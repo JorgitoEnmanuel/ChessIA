@@ -134,17 +134,22 @@ var editMode = false;
 var selectedPiece = null;
 
 // Inicialización segura del Motor
+var engine;
 try {
+    // Usamos la versión ASM.js que es compatible con GitHub Pages sin errores de seguridad
     engine = new Worker("https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.asm.js");
+    
     engine.onmessage = function(event) {
-        var line = event.data;
-        if (line.includes('score cp')) {
-            var match = line.match(/score cp (-?\d+)/);
-            if (match) currentEval = (parseInt(match[1]) / 100).toFixed(1);
+        if (event.data.includes("evaluation")) {
+            console.log("Análisis de Stockfish:", event.data);
+            // Aquí podrías actualizar el texto en tu pantalla con la evaluación
         }
-        if (line.startsWith('bestmove')) {
-            bestMove = line.split(' ')[1];
-            $('#eval').text("Eval: " + currentEval + " | Sugerido: " + bestMove);
+    };
+
+    console.log("Motor Stockfish cargado correctamente desde la CDN.");
+} catch (e) {
+    console.error("Error al cargar el motor:", e);
+    alert("El motor no pudo cargar. Revisa la consola.");
         }
     };
 } catch(e) {
