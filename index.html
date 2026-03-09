@@ -80,7 +80,7 @@
         <div id="board"></div>
         <div class="info-panel">
             <strong>Estado:</strong> <span id="status">Turno: Blancas ♔</span><br>
-            <strong>stockfish:</strong> <span id="eval">Inactivo</span>
+            <strong>Stockfish:</strong> <span id="eval">Cargando motor...</span>
         </div>
 
         <div class="board-controls">
@@ -128,68 +128,111 @@ var PIECE_IMG = 'img/chesspieces/wikipedia/{piece}.png';
 var board = null;
 var game = new Chess();
 var engine = null;
+var engineReady = false;   // ← nuevo flag: sabemos cuándo el motor está listo
 var currentEval = "0.0";
 var bestMove = "";
 var editMode = false;
 var selectedPiece = null;
 
-// Inicialización segura del Motor
-var engine;
-
+// ============================================================
+// --- MOTOR STOCKFISH ---
+// ============================================================
 try {
-    // Apuntamos directamente a tu archivo local
     engine = new Worker("stockfish.js");
 
     engine.onmessage = function(event) {
         var line = event.data;
-        
-        // Extraer Evaluación (Puntaje cp)
+
+        // El motor confirmó que está listo
+        if (line === "readyok") {
+            engineReady = true;
+            $('#eval').text("Motor listo ✔");
+            console.log("Stockfish listo.");
+        }
+
+        // Extraer evaluación numérica
         if (line.includes("info depth") && line.includes("score cp")) {
             var match = line.match(/score cp (-?\d+)/);
             if (match) {
                 currentEval = (parseInt(match[1]) / 100).toFixed(1);
-                $('#eval').text("Stockfish: " + (currentEval > 0 ? "+" + currentEval : currentEval));
+                $('#eval').text("Eval: " + (currentEval > 0 ? "+" + currentEval : currentEval));
             }
         }
-        
-        // Extraer Mejor Jugada sugerida
+
+        // Extraer mejor jugada sugerida
         if (line.startsWith("bestmove")) {
             bestMove = line.split(" ")[1];
-            console.log("Motor listo. Sugerencia:", bestMove);
+            $('#eval').text(
+                "Eval: " + (currentEval > 0 ? "+" + currentEval : currentEval) +
+                " | Sugerido: " + bestMove
+            );
+            console.log("Mejor jugada:", bestMove);
         }
     };
 
-    // Configuración inicial del motor
+    // Secuencia de arranque estándar UCI
     engine.postMessage("uci");
-    engine.postMessage("isready");
+    engine.postMessage("isready");   // responderá con "readyok"
 
-    console.log("Motor Stockfish local cargado con éxito.");
+    console.log("Worker de Stockfish creado.");
 } catch (e) {
-    console.error("Error al cargar el archivo stockfish.js local:", e);
-    $('#eval').text("Error: archivo stockfish.js no encontrado.");
+    console.error("Error al cargar stockfish.js:", e);
+    $('#eval').text("Error: stockfish.js no encontrado.");
 }
 
-// --- LÓGICA DEL TABLERO ---
+// ============================================================
+// --- 1. FUNCIÓN QUE LE HABLA AL MOTOR ---
+// ============================================================
+function analizarPosicion() {
+    if (!engine || !engineReady) {
+        console.warn("El motor aún no está listo.");
+        return;
+    }
+    // Enviamos la posición actual en formato FEN
+    engine.postMessage("position fen " + game.fen());
+    // Pedimos análisis hasta profundidad 10
+    engine.postMessage("go depth 10");
+}
+
+// ============================================================
+// --- 2. LÓGICA DEL TABLERO ---
+// ============================================================
 function onDrop(source, target) {
     if (editMode) return 'snapback';
-    var move = game.move({ from: source, to: target, promotion: 'q' });
+
+    // Intentar el movimiento en chess.js
+    var move = game.move({
+        from: source,
+        to: target,
+        promotion: 'q'  // siempre promover a dama
+    });
+
+    // Movimiento ilegal → devolver la pieza
     if (move === null) return 'snapback';
-    
+
     updateStatus();
+
+    // ← Aquí el tablero le avisa al motor para que analice
     analizarPosicion();
-    
+
+    // Enviar a Make (descomenta cuando tengas la URL)
+    /*
     setTimeout(() => {
         enviarAMake("Movimiento: " + move.san, game.fen());
     }, 1000);
+    */
 }
 
 function updateStatus() {
     var status = game.turn() === 'w' ? 'Turno: Blancas ♔' : 'Turno: Negras ♚';
-    if (game.in_checkmate()) status = '¡Jaque Mate!';
+    if (game.in_checkmate()) status = '¡Jaque Mate! 🏁';
+    if (game.in_draw())      status = 'Tablas 🤝';
     $('#status').html(status);
 }
 
+// ============================================================
 // --- MODO EDICIÓN ---
+// ============================================================
 function toggleEditMode() {
     editMode = !editMode;
     selectedPiece = null;
@@ -219,7 +262,9 @@ function buildPalette(id, pieces) {
     });
 }
 
+// ============================================================
 // --- INICIO ---
+// ============================================================
 $(document).ready(function() {
     buildPalette('whitePalette', ['wK','wQ','wR','wB','wN','wP']);
     buildPalette('blackPalette', ['bK','bQ','bR','bB','bN','bP']);
@@ -240,9 +285,24 @@ $(document).ready(function() {
         else delete pos[square];
         board.position(pos);
     });
+
+    // Enviar mensaje del chat al hacer clic en Enviar
+    $('#send-btn').click(function() {
+        var msg = $('#chat-input').val().trim();
+        if (!msg) return;
+        $('#chat-input').val('');
+        enviarAMake(msg, game.fen());
+    });
+
+    // Enviar también con Enter
+    $('#chat-input').keypress(function(e) {
+        if (e.which === 13) $('#send-btn').click();
+    });
 });
 
-// --- COMUNICACIÓN ---
+// ============================================================
+// --- COMUNICACIÓN CON MAKE ---
+// ============================================================
 async function enviarAMake(msg, fen) {
     addMessage("user", msg);
     try {
@@ -254,7 +314,10 @@ async function enviarAMake(msg, fen) {
         const data = await res.json();
         if (data.texto_pedagogico) addMessage("ai", data.texto_pedagogico);
         if (data.audioUrl) new Audio(data.audioUrl).play();
-    } catch(e) { console.error(e); }
+    } catch(e) {
+        console.error("Error al contactar Make:", e);
+        addMessage("ai", "⚠️ No se pudo conectar con el servidor.");
+    }
 }
 
 function addMessage(s, t) {
@@ -262,16 +325,21 @@ function addMessage(s, t) {
     $('#chat-messages').scrollTop($('#chat-messages')[0].scrollHeight);
 }
 
-// --- FUNCIONES BOTONES ---
-function resetBoard() { game.reset(); board.start(); updateStatus(); }
-function clearBoard() { board.clear(); game.clear(); }
-function flipBoard() { board.flip(); }
+// ============================================================
+// --- BOTONES DE CONTROL ---
+// ============================================================
+function resetBoard() { game.reset(); board.start(); updateStatus(); $('#eval').text("Motor listo ✔"); }
+function clearBoard()  { board.clear(); game.clear(); }
+function flipBoard()   { board.flip(); }
 function loadFen() {
-    var f = $('#fen-input').val();
-    if (game.load(f)) { board.position(f); updateStatus(); }
+    var f = $('#fen-input').val().trim();
+    if (game.load(f)) { board.position(f); updateStatus(); analizarPosicion(); }
+    else alert("FEN inválido. Verifica el formato.");
 }
 
-// --- VOZ ---
+// ============================================================
+// --- RECONOCIMIENTO DE VOZ ---
+// ============================================================
 const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (Speech) {
     const rec = new Speech();
@@ -282,6 +350,8 @@ if (Speech) {
         enviarAMake(e.results[0][0].transcript, game.fen()); 
     };
     rec.onerror = () => $('#mic-btn').removeClass('recording');
+} else {
+    $('#mic-btn').hide(); // ocultar si el navegador no lo soporta
 }
 </script>
 </body>
