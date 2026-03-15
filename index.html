@@ -71,6 +71,8 @@
         #mic-btn { background: #e74c3c; }
         .recording { animation: pulse 1s infinite; background: #c0392b !important; }
         @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+
     </style>
 </head>
 <body>
@@ -138,12 +140,12 @@ var selectedPiece = null;
 // --- MOTOR STOCKFISH ---
 // ============================================================
 try {
-    engine = new Worker("stockfish.js");
+    engine = new Worker("stockfish-18.js");
 
     engine.onmessage = function(event) {
         var line = event.data;
 
-        // El motor confirmó que está listo
+        // Motor listo
         if (line === "readyok") {
             engineReady = true;
             $('#eval').text("Motor listo ✔");
@@ -186,21 +188,21 @@ try {
     console.log("Worker de Stockfish creado.");
 } catch (e) {
     console.error("Error al cargar stockfish.js:", e);
-    $('#eval').text("Error: stockfish.js no encontrado.");
+    $('#eval').text("Error: stockfish-18.js no encontrado.");
 }
 
 // ============================================================
-// --- 1. FUNCIÓN QUE LE HABLA AL MOTOR ---
+// --- FUNCIÓN QUE LE HABLA AL MOTOR ---
 // ============================================================
 function analizarPosicion() {
     if (!engine || !engineReady) {
         console.warn("El motor aún no está listo.");
         return;
     }
-    // Enviamos la posición actual en formato FEN
+    engine.postMessage("setoption name MultiPV value 5"); // 5 variantes
     engine.postMessage("position fen " + game.fen());
-    // Pedimos análisis hasta profundidad 10
-    engine.postMessage("go depth 10");
+    engine.postMessage("go depth 28");                    // profundidad 28
+    $('#eval').text("Analizando... (prof. 0/28)");
 }
 
 // ============================================================
