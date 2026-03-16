@@ -135,8 +135,6 @@ var bestMove = "";
 var editMode = false;
 var selectedPiece = null;
 
-
-
 // ============================================================
 // --- FUNCIÓN QUE LE HABLA AL MOTOR ---
 // ============================================================
@@ -169,11 +167,10 @@ function onDrop(source, target) {
     updateStatus();
     analizarPosicion();
 
-    // Enviar a Make (descomenta cuando tengas la URL)
+    // ← Espera 1.5s para que Stockfish tenga algo de eval antes de enviar
     setTimeout(() => {
-    enviarAMake("Movimiento: " + move.san, game.fen());
-}, 1500);
-   
+        enviarAMake("Movimiento: " + move.san, game.fen());
+    }, 1500);
 }
 
 function updateStatus() {
@@ -324,18 +321,30 @@ $(document).ready(function() {
 // ============================================================
 async function enviarAMake(msg, fen) {
     addMessage("user", msg);
+    addMessage("ai", "⏳ Analizando...");
     try {
         const res = await fetch(makeWebhookUrl, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ mensaje: msg, fen: fen, eval: currentEval, best: bestMove })
         });
-        const data = await res.json();
-        if (data.texto_pedagogico) addMessage("ai", data.texto_pedagogico);
-        if (data.audioUrl) new Audio(data.audioUrl).play();
+        const text = await res.text();
+        console.log("Make respondió:", text);
+        try {
+            const data = JSON.parse(text);
+            if (data.texto_pedagogico) {
+                $('.ai-msg').last().text(data.texto_pedagogico);
+            } else {
+                $('.ai-msg').last().text("✅ Recibido pero sin texto_pedagogico.");
+            }
+        } catch(jsonError) {
+            // Si no es JSON válido mostramos el texto directamente
+            $('.ai-msg').last().text(text.length > 0 ? text : "⚠️ Respuesta vacía del servidor.");
+        }
+        if (text.audioUrl) new Audio(text.audioUrl).play();
     } catch(e) {
         console.error("Error al contactar Make:", e);
-        addMessage("ai", "⚠️ No se pudo conectar con el servidor.");
+        $('.ai-msg').last().text("⚠️ No se pudo conectar con el servidor.");
     }
 }
 
