@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="stockfish-18-lite.js"></script>
     
     <style>
         * { box-sizing: border-box; }
@@ -71,8 +72,6 @@
         #mic-btn { background: #e74c3c; }
         .recording { animation: pulse 1s infinite; background: #c0392b !important; }
         @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-
-
     </style>
 </head>
 <body>
@@ -130,45 +129,54 @@ var PIECE_IMG = 'img/chesspieces/wikipedia/{piece}.png';
 var board = null;
 var game = new Chess();
 var engine = null;
-var engineReady = false;   // ← nuevo flag: sabemos cuándo el motor está listo
+var engineReady = false;
 var currentEval = "0.0";
 var bestMove = "";
 var editMode = false;
 var selectedPiece = null;
 
 // ============================================================
-// --- MOTOR STOCKFISH ---
+// --- MOTOR STOCKFISH 18 LITE ---
 // ============================================================
-try {
-    engine = new Worker("stockfish-18.js");
+$('#eval').text("Cargando Stockfish 18...");
 
-    engine.onmessage = function(event) {
-        var line = event.data;
+Stockfish().then(function(sf) {
+    engine = sf;
+
+    engine.addMessageListener(function(line) {
 
         // Motor listo
         if (line === "readyok") {
             engineReady = true;
-            $('#eval').text("Motor listo ✔");
-            console.log("Stockfish listo.");
+            $('#eval').text("Stockfish 18 listo ✔");
+            console.log("Stockfish 18 listo.");
         }
 
-        // Capturar evaluación de la línea principal (multipv 1)
+        // Capturar evaluación numérica en tiempo real
         if (line.includes("score cp") && line.includes(" pv ")) {
             var depthM = line.match(/depth (\d+)/);
             var cpM    = line.match(/score cp (-?\d+)/);
             var mpvM   = line.match(/multipv (\d+)/);
             if (!cpM) return;
-
             var depth   = depthM ? parseInt(depthM[1]) : 0;
             var evalNum = (parseInt(cpM[1]) / 100).toFixed(1);
             var idx     = mpvM ? mpvM[1] : "1";
-
             if (idx === "1") {
                 currentEval = evalNum;
                 $('#eval').text(
-                    "Eval: " + (evalNum > 0 ? "+" + evalNum : evalNum) +
+                    "Eval: " + (parseFloat(evalNum) > 0 ? "+" + evalNum : evalNum) +
                     " | Prof: " + depth + "/28"
                 );
+            }
+        }
+
+        // Capturar ventaja de mate
+        if (line.includes("score mate") && line.includes(" pv ")) {
+            var mateM = line.match(/score mate (-?\d+)/);
+            var mpvM2 = line.match(/multipv (\d+)/);
+            if (mateM && (!mpvM2 || mpvM2[1] === "1")) {
+                var mateIn = parseInt(mateM[1]);
+                $('#eval').text(mateIn > 0 ? "Mate en " + mateIn + " ♔" : "Recibe mate en " + Math.abs(mateIn) + " ♚");
             }
         }
 
@@ -176,20 +184,25 @@ try {
         if (line.startsWith("bestmove")) {
             bestMove = line.split(" ")[1];
             $('#eval').text(
-                "Eval: " + (currentEval > 0 ? "+" + currentEval : currentEval) +
+                "Eval: " + (parseFloat(currentEval) > 0 ? "+" + currentEval : currentEval) +
                 " | Mejor: " + bestMove + " ✔"
             );
             console.log("Análisis completo. Mejor jugada:", bestMove);
         }
-    };
+    });
 
+    // Configuración máxima del motor
     engine.postMessage("uci");
+    engine.postMessage("setoption name Threads value 4");
+    engine.postMessage("setoption name Hash value 256");
+    engine.postMessage("setoption name Use NNUE value true");
     engine.postMessage("isready");
-    console.log("Worker de Stockfish creado.");
-} catch (e) {
-    console.error("Error al cargar stockfish.js:", e);
-    $('#eval').text("Error: stockfish-18.js no encontrado.");
-}
+    console.log("Stockfish 18 inicializado.");
+
+}).catch(function(e) {
+    console.error("Error al cargar Stockfish 18:", e);
+    $('#eval').text("Error al cargar Stockfish 18.");
+});
 
 // ============================================================
 // --- FUNCIÓN QUE LE HABLA AL MOTOR ---
@@ -199,31 +212,28 @@ function analizarPosicion() {
         console.warn("El motor aún no está listo.");
         return;
     }
-    engine.postMessage("setoption name MultiPV value 5"); // 5 variantes
+    engine.postMessage("stop");
+    engine.postMessage("setoption name MultiPV value 5");
     engine.postMessage("position fen " + game.fen());
-    engine.postMessage("go depth 28");                    // profundidad 28
+    engine.postMessage("go depth 28");
     $('#eval').text("Analizando... (prof. 0/28)");
 }
 
 // ============================================================
-// --- 2. LÓGICA DEL TABLERO ---
+// --- LÓGICA DEL TABLERO ---
 // ============================================================
 function onDrop(source, target) {
     if (editMode) return 'snapback';
 
-    // Intentar el movimiento en chess.js
     var move = game.move({
         from: source,
         to: target,
-        promotion: 'q'  // siempre promover a dama
+        promotion: 'q'
     });
 
-    // Movimiento ilegal → devolver la pieza
     if (move === null) return 'snapback';
 
     updateStatus();
-
-    // ← Aquí el tablero le avisa al motor para que analice
     analizarPosicion();
 
     // Enviar a Make (descomenta cuando tengas la URL)
@@ -339,7 +349,7 @@ function addMessage(s, t) {
 // ============================================================
 // --- BOTONES DE CONTROL ---
 // ============================================================
-function resetBoard() { game.reset(); board.start(); updateStatus(); $('#eval').text("Motor listo ✔"); }
+function resetBoard() { game.reset(); board.start(); updateStatus(); $('#eval').text("Stockfish 18 listo ✔"); }
 function clearBoard()  { board.clear(); game.clear(); }
 function flipBoard()   { board.flip(); }
 function loadFen() {
@@ -362,7 +372,7 @@ if (Speech) {
     };
     rec.onerror = () => $('#mic-btn').removeClass('recording');
 } else {
-    $('#mic-btn').hide(); // ocultar si el navegador no lo soporta
+    $('#mic-btn').hide();
 }
 </script>
 </body>
