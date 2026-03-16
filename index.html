@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <link rel="preload" href="stockfish-18-lite.wasm" as="fetch" crossorigin>
     
     <style>
         * { box-sizing: border-box; }
@@ -255,7 +256,7 @@ $(document).ready(function() {
     // ============================================================
     // --- MOTOR STOCKFISH 18 LITE ---
     // ============================================================
-    $('#eval').text("Cargando Stockfish 18...");
+    $('#eval').html('⏳ Cargando Stockfish 18... <small>(puede tardar unos segundos)</small>');
 
     try {
         engine = new Worker("stockfish-18-lite.js");
@@ -306,8 +307,8 @@ $(document).ready(function() {
         };
 
         engine.postMessage("uci");
-        engine.postMessage("setoption name Threads value 4");
-        engine.postMessage("setoption name Hash value 256");
+        engine.postMessage("setoption name Threads value 2");
+        engine.postMessage("setoption name Hash value 128");
         engine.postMessage("setoption name Use NNUE value true");
         engine.postMessage("isready");
         console.log("Stockfish 18 Worker creado.");
