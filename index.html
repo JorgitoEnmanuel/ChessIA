@@ -170,10 +170,9 @@ function onDrop(source, target) {
     analizarPosicion();
 
     // Enviar a Make (descomenta cuando tengas la URL)
-    
     setTimeout(() => {
-        enviarAMake("Movimiento: " + move.san, game.fen());
-    }, 1000);
+    enviarAMake("Movimiento: " + move.san, game.fen());
+}, 1500);
    
 }
 
