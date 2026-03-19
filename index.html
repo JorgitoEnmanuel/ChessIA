@@ -330,18 +330,33 @@ async function enviarAMake(msg, fen) {
         });
         const text = await res.text();
         console.log("Make respondió:", text);
+
+        var contenido = null;
+
+        // Intento 1: parsear como JSON normal
         try {
-            const data = JSON.parse(text);
-            if (data.texto_pedagogico) {
-                $('.ai-msg').last().text(data.texto_pedagogico);
-            } else {
-                $('.ai-msg').last().text("✅ Recibido pero sin texto_pedagogico.");
-            }
-        } catch(jsonError) {
-            // Si no es JSON válido mostramos el texto directamente
-            $('.ai-msg').last().text(text.length > 0 ? text : "⚠️ Respuesta vacía del servidor.");
+            var data = JSON.parse(text);
+            if (data.texto_pedagogico) contenido = data.texto_pedagogico;
+        } catch(e) {}
+
+        // Intento 2: buscar "content" en el texto
+        if (!contenido) {
+            var match = text.match(/"content"\s*:\s*"([\s\S]*?)"\s*[,}]/);
+            if (match) contenido = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
         }
-        if (text.audioUrl) new Audio(text.audioUrl).play();
+
+        // Intento 3: buscar bloque antes de logprobs
+        if (!contenido) {
+            var matches = text.match(/"content":"([\s\S]+?)(?:","logprobs")/);
+            if (matches) contenido = matches[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+        }
+
+        if (contenido) {
+            $('.ai-msg').last().text(contenido);
+        } else {
+            $('.ai-msg').last().text("⚠️ No se pudo procesar la respuesta.");
+        }
+
     } catch(e) {
         console.error("Error al contactar Make:", e);
         $('.ai-msg').last().text("⚠️ No se pudo conectar con el servidor.");
