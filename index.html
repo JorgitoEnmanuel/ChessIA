@@ -144,9 +144,10 @@ function analizarPosicion() {
         return;
     }
     engine.postMessage("stop");
+    engine.postMessage("setoption name Threads value 4");
     engine.postMessage("setoption name MultiPV value 5");
     engine.postMessage("position fen " + game.fen());
-    engine.postMessage("go depth 28");
+    engine.postMessage(""go movetime 8000"); // 8 segundos máximo
     $('#eval').text("Analizando... (prof. 0/28)");
 }
 
