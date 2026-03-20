@@ -147,7 +147,7 @@ function analizarPosicion() {
     engine.postMessage("setoption name Threads value 4");
     engine.postMessage("setoption name MultiPV value 5");
     engine.postMessage("position fen " + game.fen());
-    engine.postMessage(""go movetime 8000"); // 8 segundos máximo
+    engine.postMessage("go movetime 8000"); // 8 segundos máximo
     $('#eval').text("Analizando... (prof. 0/28)");
 }
 
